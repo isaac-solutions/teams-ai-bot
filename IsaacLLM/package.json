@@ -1,0 +1,44 @@
+{
+    "name": "aisaac",
+    "version": "1.4.3",
+    "msteams": {
+        "teamsAppId": null
+    },
+    "description": "Aisaac - AI Agent with Ephemeral File Upload Support for Microsoft Teams",
+    "engines": {
+        "node": "20 || 22"
+    },
+    "author": "Aisaac Tech",
+    "license": "MIT",
+    "main": "./src/index.js",
+    "scripts": {
+        "dev:teamsfx": "env-cmd --silent -f .localConfigs npm run dev",
+        "dev:teamsfx:testtool": "env-cmd --silent -f .localConfigs.playground npm run dev",
+        "dev:teamsfx:launch-testtool": "env-cmd --silent -f env/.env.playground teamsapptester start",
+        "dev": "nodemon --inspect=9239 --signal SIGINT ./src/index.js",
+        "start": "node ./src/index.js",
+        "test": "echo \"Error: no test specified\" && exit 1",
+        "watch": "nodemon --exec \"npm run start\""
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/Aisaac/Aisaac-Teams-Agent"
+    },
+    "dependencies": {
+        "@azure/identity": "^4.11.1",
+        "@azure/search-documents": "^12.0.0",
+        "@microsoft/teams.apps": "^2.0.0",
+        "@microsoft/teams.ai": "^2.0.0",
+        "@microsoft/teams.openai": "^2.0.0",
+        "@microsoft/teams.common": "^2.0.0",
+        "axios": "^1.6.0",
+        "openai": "^4.20.0",
+        "pdf-parse": "^1.1.1",
+        "mammoth": "^1.6.0",
+        "mailparser": "^3.6.5"
+    },
+    "devDependencies": {
+        "env-cmd": "^10.1.0",
+        "nodemon": "^3.1.7"
+    }
+}

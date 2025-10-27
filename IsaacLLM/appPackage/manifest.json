@@ -1,0 +1,66 @@
+{
+    "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.23/MicrosoftTeams.schema.json",
+    "manifestVersion": "1.23",
+    "version": "1.4.3",
+    "id": "${{TEAMS_APP_ID}}",
+    "developer": {
+        "name": "Aisaac",
+        "websiteUrl": "https://github.com/Aisaac",
+        "privacyUrl": "https://github.com/Aisaac/privacy",
+        "termsOfUseUrl": "https://github.com/Aisaac/terms"
+    },
+    "icons": {
+        "color": "color.png",
+        "outline": "outline.png"
+    },
+    "name": {
+        "short": "Aisaac",
+        "full": "Aisaac - AI Agent with File Upload Support"
+    },
+    "description": {
+        "short": "AI Agent with ephemeral file upload support",
+        "full": "Aisaac is an intelligent AI agent that can process PDF, DOCX, TXT, and EML files ephemerally. Files are processed in memory and immediately discarded, with only the extracted text content preserved in conversation context for analysis and reference."
+    },
+    "accentColor": "#FFFFFF",
+    "bots": [
+        {
+            "botId": "${{BOT_ID}}",
+            "scopes": [
+                "team",
+                "groupChat",
+                "personal"
+            ],
+            "supportsFiles": true,
+            "isNotificationOnly": false,
+            "commandLists": [
+                {
+                    "scopes": [
+                        "personal"
+                    ],
+                    "commands": [
+                        {
+                            "title": "What can you do?",
+                            "description": "Learn about Aisaac's capabilities including file upload support"
+                        },
+                        {
+                            "title": "Upload a file",
+                            "description": "Upload PDF, DOCX, TXT, or EML files for analysis"
+                        },
+                        {
+                            "title": "Privacy policy",
+                            "description": "Learn about our ephemeral file processing and privacy protection"
+                        }
+                    ]
+                }
+            ]
+        }
+    ],
+    "composeExtensions": [],
+    "configurableTabs": [],
+    "staticTabs": [],
+    "permissions": [
+        "identity",
+        "messageTeamMembers"
+    ],
+    "validDomains": []
+}

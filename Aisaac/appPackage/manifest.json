@@ -1,0 +1,74 @@
+{
+    "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.23/MicrosoftTeams.schema.json",
+    "manifestVersion": "1.23",
+    "version": "1.0.0",
+    "id": "${{TEAMS_APP_ID}}",
+    "developer": {
+        "name": "AIsaac Consulting",
+        "websiteUrl": "https://www.ai.isaacteam.com",
+        "privacyUrl": "https://www.ai.isaacteam.com/privacy",
+        "termsOfUseUrl": "https://www.ai.isaacteam.com/terms"
+    },
+    "icons": {
+        "color": "color.png",
+        "outline": "outline.png"
+    },
+    "name": {
+        "short": "RAG Aisaac",
+        "full": "RAG Aisaac - Intelligent Helper for Consultants"
+    },
+    "description": {
+        "short": "AI assistant with RAG capabilities for Isaac consultants",
+        "full": "RAG Aisaac helps Isaac consultants with consulting approaches, best practices, and employee handbook questions using verified company knowledge sources. Get instant answers with proper citations from your organization's documentation."
+    },
+    "accentColor": "#0078D4",
+    "bots": [
+        {
+            "botId": "${{BOT_ID}}",
+            "scopes": [
+                "team",
+                "groupChat",
+                "personal"
+            ],
+            "supportsFiles": false,
+            "isNotificationOnly": false,
+            "commandLists": [
+                {
+                    "scopes": [
+                        "personal"
+                    ],
+                    "commands": [
+                        {
+                            "title": "Consulting Best Practices",
+                            "description": "Get guidance on consulting approaches and methodologies"
+                        },
+                        {
+                            "title": "Employee Handbook Questions",
+                            "description": "Find answers about company policies and procedures"
+                        },
+                        {
+                            "title": "Client Management Tips",
+                            "description": "Learn best practices for managing client relationships"
+                        },
+                        {
+                            "title": "Project Management",
+                            "description": "Get help with project planning and execution"
+                        },
+                        {
+                            "title": "Documentation Search",
+                            "description": "Search through company knowledge base"
+                        }
+                    ]
+                }
+            ]
+        }
+    ],
+    "composeExtensions": [],
+    "configurableTabs": [],
+    "staticTabs": [],
+    "permissions": [
+        "identity",
+        "messageTeamMembers"
+    ],
+    "validDomains": []
+}
