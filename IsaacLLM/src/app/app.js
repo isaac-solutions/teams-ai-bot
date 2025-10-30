@@ -11,6 +11,7 @@ const config = require("../config");
 // Import skills architecture
 const { AzureAISearchDataSource } = require("./azureAISearchDataSource");
 const { RAGSearchSkill } = require("./skills/ragSearchSkill");
+const { CareerDevelopmentSkill } = require("./skills/careerDevelopmentSkill");
 const { FileProcessingSkill } = require("./skills/fileProcessingSkill");
 const { IndexDocumentSkill } = require("./skills/indexDocumentSkill");
 const { WebSearchSkill } = require("./skills/webSearchSkill");
@@ -65,6 +66,7 @@ try {
     }
     
     skills = [
+      new CareerDevelopmentSkill(dataSource), // Career development should run first for dev queries
       new RAGSearchSkill(dataSource),
       new FileProcessingSkill(),
       webSearchSkill
@@ -155,52 +157,66 @@ function getContextUsage(messages, instructions) {
  * @returns {object} - Adaptive card object
  */
 function createResetCard(contextUsage = null) {
-  const body = [];
+  const card = {
+    type: "AdaptiveCard",
+    version: "1.3",
+    body: []
+  };
   
-  // Add context window indicator if provided
+  // If we have context usage, create a row with button column and usage column
   if (contextUsage) {
-    const color = contextUsage.isAtLimit ? "Attention" : 
-                  contextUsage.isNearLimit ? "Warning" : "Good";
-    
-    const statusText = contextUsage.isAtLimit ? "⚠️ Context window nearly full!" :
-                      contextUsage.isNearLimit ? "⚡ Context window getting full" :
-                      "✅ Context window has space";
-    
-    body.push({
-      type: "Container",
-      style: "emphasis",
-      items: [
+    card.body.push({
+      type: "ColumnSet",
+      spacing: "None",
+      columns: [
         {
-          type: "TextBlock",
-          text: statusText,
-          weight: "Bolder",
-          size: "Small",
-          color: color
+          type: "Column",
+          width: "auto",
+          items: [
+            {
+              type: "ActionSet",
+              actions: [
+                {
+                  type: "Action.Submit",
+                  title: "🔄 Reset Conversation",
+                  data: {
+                    action: "reset_conversation"
+                  }
+                }
+              ]
+            }
+          ]
         },
         {
-          type: "TextBlock",
-          text: `${contextUsage.usagePercentage}% used (${contextUsage.estimatedTokens.toLocaleString()}/${contextUsage.maxTokens.toLocaleString()} tokens)`,
-          size: "Small",
-          color: "Default"
+          type: "Column",
+          width: "stretch",
+          verticalContentAlignment: "Center",
+          items: [
+            {
+              type: "TextBlock",
+              text: `${contextUsage.usagePercentage}% used`,
+              size: "Small",
+              horizontalAlignment: "Right",
+              spacing: "None"
+            }
+          ]
         }
       ]
     });
+  } else {
+    // No context usage, just the button
+    card.actions = [
+      {
+        type: "Action.Submit",
+        title: "🔄 Reset Conversation",
+        data: {
+          action: "reset_conversation"
+        }
+      }
+    ];
   }
   
-  return {
-    type: "AdaptiveCard",
-    version: "1.3",
-    body: body,
-     actions: [
-       {
-         type: "Action.Submit",
-         title: "🔄 Reset Conversation",
-         data: {
-           action: "reset_conversation"
-         }
-       }
-     ]
-  };
+  return card;
 }
 
 const createTokenFactory = () => {

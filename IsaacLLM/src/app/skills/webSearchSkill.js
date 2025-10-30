@@ -13,7 +13,7 @@ class WebSearchSkill extends BaseSkill {
     this.enabled = false; // Disabled until API is configured
     this.apiKey = config.googleApiKey;
     this.searchEngineId = config.googleSearchEngineId;
-    this.maxResults = 2; // Top 2 results (optimized for performance)
+    this.maxResults = 4; // Top 4 results for comprehensive research
     this.maxCharactersPerPage = 4000; // Limit content per page
     this.fetchTimeout = 8000; // 8 second timeout for fetching pages
     this.totalSearchTimeout = 20000; // 20 second overall timeout for entire search operation

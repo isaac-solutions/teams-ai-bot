@@ -12,6 +12,21 @@ param azureOpenAIEndpoint string
 @secure()
 param azureOpenAIDeploymentName string
 
+@secure()
+param azureOpenAIEmbeddingDeploymentName string
+
+@secure()
+param azureSearchKey string
+
+@secure()
+param azureSearchEndpoint string
+
+@secure()
+param googleSearchApiKey string
+
+@secure()
+param googleSearchEngineId string
+
 param webAppSKU string
 
 @maxLength(42)
@@ -83,6 +98,26 @@ resource webApp 'Microsoft.Web/sites@2021-02-01' = {
         {
           name: 'AZURE_OPENAI_DEPLOYMENT_NAME'
           value: azureOpenAIDeploymentName
+        }
+        {
+          name: 'AZURE_OPENAI_EMBEDDING_DEPLOYMENT_NAME'
+          value: azureOpenAIEmbeddingDeploymentName
+        }
+        {
+          name: 'AZURE_SEARCH_KEY'
+          value: azureSearchKey
+        }
+        {
+          name: 'AZURE_SEARCH_ENDPOINT'
+          value: azureSearchEndpoint
+        }
+        {
+          name: 'GOOGLE_SEARCH_API_KEY'
+          value: googleSearchApiKey
+        }
+        {
+          name: 'GOOGLE_SEARCH_ENGINE_ID'
+          value: googleSearchEngineId
         }
       ]
       ftpsState: 'FtpsOnly'
