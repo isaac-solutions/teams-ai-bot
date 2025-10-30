@@ -39,7 +39,7 @@ try {
     console.log('[Init] Initializing Azure AI Search data source...');
     dataSource = new AzureAISearchDataSource({
       name: "azure-ai-search",
-      indexName: "gptkbindex",
+      indexName: "gptkbindex", // Actual Azure index name
       azureAISearchApiKey: config.azureSearchKey,
       azureAISearchEndpoint: config.azureSearchEndpoint,
       azureOpenAIApiKey: config.azureOpenAIKey,

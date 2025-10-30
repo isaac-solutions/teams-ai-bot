@@ -38,45 +38,29 @@ class AzureAISearchDataSource {
         if(!query) {
             return "";
         }
-        
-        const selectedFields = [
-            "id",
-            "content",
-            "sourcefile",
-            "sourcepage",
-            "category",
-            "userId",
-            "documentScope"
-        ];
 
         try {
             // hybrid search
             const queryVector = await this.getEmbeddingVector(query);
             
-            // Build filter for multi-tenant access:
-            // Show company-wide documents OR user's personal documents
-            let filter = "documentScope eq 'company-wide'";
-            if (userId) {
-                filter = `documentScope eq 'company-wide' or userId eq '${userId}'`;
-            }
-            
-            const searchResults = await this.searchClient.search(query, {
-                searchFields: ["content"],
-                select: selectedFields,
+            // Build search options using actual index field names
+            // Actual gptkbindex schema: id, content, embedding, category, sourcepage, sourcefile
+            const searchOptions = {
+                searchFields: ["content"], // Search in content field
                 top: 3,
-                filter: filter,
                 vectorSearchOptions: {
                     queries: [
                         {
                             kind: "vector",
-                            fields: ["embedding"],
+                            fields: ["embedding"], // Use correct vector field name
                             kNearestNeighborsCount: 3,
-                            // The query vector is the embedding of the user's input
                             vector: queryVector
                         }
                     ]
-                },
-            });
+                }
+            };
+            
+            const searchResults = await this.searchClient.search(query, searchOptions);
 
             if (!searchResults.results) {
                 return "";
@@ -84,15 +68,20 @@ class AzureAISearchDataSource {
 
             let doc = "";
             for await (const result of searchResults.results) {
-                // Create a more detailed citation with page info if available
-                const citation = result.document.sourcefile || 'Unknown Document';
-                const pageInfo = result.document.sourcepage ? ` (Page ${result.document.sourcepage})` : '';
-                const category = result.document.category ? ` [${result.document.category}]` : '';
-                const scope = result.document.documentScope === 'personal' ? ' [Personal Document]' : '';
+                // Use actual gptkbindex schema fields
+                const citation = result.document?.sourcefile || 'Unknown Document';
+                const pageInfo = result.document?.sourcepage ? ` (Page ${result.document.sourcepage})` : '';
+                const category = result.document?.category ? ` [${result.document.category}]` : '';
+                const content = result.document?.content || '';
+                
+                if (!content) {
+                    console.log('[RAGSearchSkill] Skipping result with no content');
+                    continue;
+                }
                 
                 const formattedResult = this.formatDocument(
-                    result.document.content, 
-                    `${citation}${pageInfo}${category}${scope}`
+                    content, 
+                    `${citation}${pageInfo}${category}`
                 );
                 doc += formattedResult;
             }

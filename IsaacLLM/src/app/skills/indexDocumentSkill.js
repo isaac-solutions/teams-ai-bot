@@ -31,12 +31,11 @@ class IndexDocumentSkill extends BaseSkill {
       // Generate embedding for the document
       const embedding = await this.dataSource.getEmbeddingVector(text);
       
-      // Create document object
+      // Create document object using actual gptkbindex schema
+      // Actual schema: id, content, embedding, category, sourcepage, sourcefile
       const document = {
         id: `user-${userId}-${Date.now()}-${this.sanitizeFileName(fileName)}`,
         content: text,
-        userId: userId,
-        documentScope: 'personal',
         sourcefile: fileName,
         sourcepage: null,
         category: 'user-uploaded',

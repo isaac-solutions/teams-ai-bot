@@ -409,7 +409,7 @@ Optimized: "Microsoft company products services"`;
   async fetchViaJinaReader(url) {
     const jinaUrl = `https://r.jina.ai/${encodeURIComponent(url)}`;
     const response = await axios.get(jinaUrl, {
-      timeout: 10000,
+      timeout: 5000, // Reduced to 5 seconds for faster fallback
       headers: {
         'Accept': 'text/plain',
         'X-Return-Format': 'text'
