@@ -48,10 +48,26 @@ try {
     });
     
     // Initialize skills
+    const webSearchSkill = new WebSearchSkill({
+      googleApiKey: config.googleApiKey,
+      googleSearchEngineId: config.googleSearchEngineId,
+      azureOpenAIKey: config.azureOpenAIKey,
+      azureOpenAIEndpoint: config.azureOpenAIEndpoint,
+      azureOpenAIDeploymentName: config.azureOpenAIDeploymentName
+    });
+    
+    // Enable web search if credentials are configured
+    if (config.googleApiKey && config.googleSearchEngineId) {
+      webSearchSkill.enable();
+      console.log('[Init] Google Web Search enabled');
+    } else {
+      console.log('[Init] Google Web Search not configured - skill disabled');
+    }
+    
     skills = [
       new RAGSearchSkill(dataSource),
       new FileProcessingSkill(),
-      new WebSearchSkill() // Placeholder - disabled by default
+      webSearchSkill
     ];
     
     // Initialize simple router
@@ -60,8 +76,23 @@ try {
     console.log('[Init] Skills architecture initialized successfully');
   } else {
     console.log('[Init] Azure AI Search not configured - running in file-only mode');
-    // File processing only mode
-    skills = [new FileProcessingSkill()];
+    
+    // Initialize web search skill even in file-only mode
+    const webSearchSkill = new WebSearchSkill({
+      googleApiKey: config.googleApiKey,
+      googleSearchEngineId: config.googleSearchEngineId,
+      azureOpenAIKey: config.azureOpenAIKey,
+      azureOpenAIEndpoint: config.azureOpenAIEndpoint,
+      azureOpenAIDeploymentName: config.azureOpenAIDeploymentName
+    });
+    
+    if (config.googleApiKey && config.googleSearchEngineId) {
+      webSearchSkill.enable();
+      console.log('[Init] Google Web Search enabled');
+    }
+    
+    // File processing only mode (with optional web search)
+    skills = [new FileProcessingSkill(), webSearchSkill];
     router = new SimpleRouter(skills);
   }
 } catch (error) {
@@ -273,6 +304,12 @@ app.on('message', async ({ send, stream, activity }) => {
       // Extract citations from RAG results
       citations = CitationBuilder.extractCitations(skillResults.rag_search);
       console.log(`[Message] Added ${citations.length} citations from RAG search`);
+    }
+    
+    // Add web search context if available
+    if (skillResults.web_search && skillResults.web_search.trim()) {
+      enhancedInstructions += '\n\n' + skillResults.web_search;
+      console.log(`[Message] Added web search results to context`);
     }
     
     // Handle file processing results

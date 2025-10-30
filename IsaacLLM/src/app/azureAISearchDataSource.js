@@ -122,11 +122,21 @@ class AzureAISearchDataSource {
      * @returns {Promise<number[]>} The embedding vector for the user's input.
      */
     async getEmbeddingVector(text) {
+        // Extract base endpoint from full endpoint (may include /openai/deployments/...)
+        let baseEndpoint = this.options.azureOpenAIEndpoint;
+        
+        // If endpoint contains /openai/, extract just the base URL
+        if (baseEndpoint.includes('/openai/')) {
+            const url = new URL(baseEndpoint);
+            baseEndpoint = `${url.protocol}//${url.host}/`;
+        }
+        
         const client = new AzureOpenAI({
             apiKey: this.options.azureOpenAIApiKey,
-            endpoint: this.options.azureOpenAIEndpoint,
-            apiVersion: "2024-02-01",
+            endpoint: baseEndpoint,
+            apiVersion: "2024-08-01-preview", // Updated to stable API version for embeddings
         });
+        
         const result = await client.embeddings.create({
             input: text,
             model: this.options.azureOpenAIEmbeddingDeploymentName,
