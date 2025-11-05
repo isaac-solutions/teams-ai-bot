@@ -1,13 +1,13 @@
 {
     "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.23/MicrosoftTeams.schema.json",
     "manifestVersion": "1.23",
-    "version": "1.5.3",
+    "version": "1.7.2",
     "id": "${{TEAMS_APP_ID}}",
     "developer": {
         "name": "Aisaac",
-        "websiteUrl": "https://github.com/Aisaac",
-        "privacyUrl": "https://github.com/Aisaac/privacy",
-        "termsOfUseUrl": "https://github.com/Aisaac/terms"
+        "websiteUrl": "https://www.microsoft.com",
+        "privacyUrl": "https://www.microsoft.com/en-us/privacy",
+        "termsOfUseUrl": "https://www.microsoft.com/en-us/servicesagreement"
     },
     "icons": {
         "color": "color.png",

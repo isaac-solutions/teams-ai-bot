@@ -13,10 +13,10 @@ class WebSearchSkill extends BaseSkill {
     this.enabled = false; // Disabled until API is configured
     this.apiKey = config.googleApiKey;
     this.searchEngineId = config.googleSearchEngineId;
-    this.maxResults = 4; // Top 4 results for comprehensive research
+    this.maxResults = 5; // Top 5 results for better success rate (some sites block datacenter IPs)
     this.maxCharactersPerPage = 4000; // Limit content per page
     this.fetchTimeout = 8000; // 8 second timeout for fetching pages
-    this.totalSearchTimeout = 20000; // 20 second overall timeout for entire search operation
+    this.totalSearchTimeout = 25000; // 25 second overall timeout (increased for more results)
     this.apiCallCount = 0; // Track API usage
     this.dailyLimit = 90; // Daily limit (buffer under Google's 100/day free tier)
     this.lastResetDate = new Date().toDateString(); // Track when to reset counter
@@ -524,41 +524,35 @@ Optimized: "Microsoft company products services"`;
 
     const lowerQuery = query.toLowerCase();
     
-    // Priority 1: Skip if files are present (let file processing handle it)
-    if (context.hasFiles) {
-      console.log('[WebSearchSkill] Skipping - files take priority');
-      return false;
-    }
-    
-    // Priority 2: Explicit web search triggers (highest confidence)
+    // Priority 1: Explicit web search triggers (highest confidence)
     const explicitWebTriggers = /search (the )?web|google|look ?up online|find online|search (for|about)|web search|research|discovery/i;
     if (explicitWebTriggers.test(query)) {
       console.log('[WebSearchSkill] Explicit web search trigger detected');
       return true;
     }
     
-    // Priority 3: Skip internal/policy queries (should use RAG)
+    // Priority 2: Skip internal/policy queries (should use RAG)
     const internalKeywords = /our (policy|policies|team|benefits|vacation|pto|handbook)|my (manager|schedule|benefits|team)/i;
     if (internalKeywords.test(query)) {
       console.log('[WebSearchSkill] Skipping - detected internal/policy query (RAG should handle)');
       return false;
     }
     
-    // Priority 4: Time-sensitive/current information
+    // Priority 3: Time-sensitive/current information
     const timeSensitive = /today|latest|current|breaking|now|recent|this (week|month|year)|what('s| is) happening/i;
     if (timeSensitive.test(query)) {
       console.log('[WebSearchSkill] Time-sensitive query detected');
       return true;
     }
     
-    // Priority 5: News queries
+    // Priority 4: News queries
     const newsKeywords = /news|headline|announcement/i;
     if (newsKeywords.test(query)) {
       console.log('[WebSearchSkill] News query detected');
       return true;
     }
     
-    // Priority 6: External research queries (companies, competitors, industries)
+    // Priority 5: External research queries (companies, competitors, industries)
     const externalResearch = /(research|information|tell me about|learn about|background on) (the )?(company|competitor|industry|market|client)/i;
     const companyNamePattern = /\b[A-Z][a-zA-Z]+(\s[A-Z][a-zA-Z]+)*\s(Inc|Corp|LLC|Ltd|Corporation|Company)\b/;
     
@@ -567,7 +561,7 @@ Optimized: "Microsoft company products services"`;
       return true;
     }
     
-    // Priority 7: Specific year mentions (2024, 2025, etc.)
+    // Priority 6: Specific year mentions (2024, 2025, etc.)
     const yearPattern = /\b(2024|2025|2026)\b/;
     if (yearPattern.test(query)) {
       console.log('[WebSearchSkill] Year-specific query detected');

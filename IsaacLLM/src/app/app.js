@@ -15,6 +15,7 @@ const { CareerDevelopmentSkill } = require("./skills/careerDevelopmentSkill");
 const { FileProcessingSkill } = require("./skills/fileProcessingSkill");
 const { IndexDocumentSkill } = require("./skills/indexDocumentSkill");
 const { WebSearchSkill } = require("./skills/webSearchSkill");
+const { YahooFinanceSkill } = require("./skills/yahooFinanceSkill");
 const { SimpleRouter } = require("./orchestration/simpleRouter");
 const { CitationBuilder } = require("./utils/citationBuilder");
 
@@ -65,10 +66,19 @@ try {
       console.log('[Init] Google Web Search not configured - skill disabled');
     }
     
+    // Initialize Yahoo Finance skill with LLM support for ticker extraction
+    const yahooFinanceSkill = new YahooFinanceSkill({
+      azureOpenAIKey: config.azureOpenAIKey,
+      azureOpenAIEndpoint: config.azureOpenAIEndpoint,
+      azureOpenAIDeploymentName: config.azureOpenAIDeploymentName
+    });
+    console.log('[Init] Yahoo Finance skill enabled');
+    
     skills = [
       new CareerDevelopmentSkill(dataSource), // Career development should run first for dev queries
       new RAGSearchSkill(dataSource),
       new FileProcessingSkill(),
+      yahooFinanceSkill, // Financial data before web search for better stock price queries
       webSearchSkill
     ];
     
@@ -93,8 +103,16 @@ try {
       console.log('[Init] Google Web Search enabled');
     }
     
-    // File processing only mode (with optional web search)
-    skills = [new FileProcessingSkill(), webSearchSkill];
+    // Initialize Yahoo Finance skill with LLM support for ticker extraction
+    const yahooFinanceSkill = new YahooFinanceSkill({
+      azureOpenAIKey: config.azureOpenAIKey,
+      azureOpenAIEndpoint: config.azureOpenAIEndpoint,
+      azureOpenAIDeploymentName: config.azureOpenAIDeploymentName
+    });
+    console.log('[Init] Yahoo Finance skill enabled');
+    
+    // File processing only mode (with optional web search and finance)
+    skills = [new FileProcessingSkill(), yahooFinanceSkill, webSearchSkill];
     router = new SimpleRouter(skills);
   }
 } catch (error) {
@@ -178,7 +196,7 @@ function createResetCard(contextUsage = null) {
               actions: [
                 {
                   type: "Action.Submit",
-                  title: "🔄 Reset Conversation",
+                  title: "🔄 Reset Conversation ",
                   data: {
                     action: "reset_conversation"
                   }
@@ -293,15 +311,26 @@ app.on('message', async ({ send, stream, activity }) => {
 
   try {
     // Prepare context for skills routing
-    const hasFiles = activity.attachments && activity.attachments.length > 0;
+    // Only count actual file attachments (not citations, mentions, etc.)
+    const fileAttachments = (activity.attachments || []).filter(att => 
+      att.contentType && (
+        att.contentType.startsWith('application/') || 
+        att.contentType.startsWith('text/') ||
+        att.contentType === 'application/vnd.microsoft.teams.file.download.info'
+      )
+    );
+    const hasFiles = fileAttachments.length > 0;
     const context = {
       userId: userId,
-      attachments: activity.attachments || [],
+      attachments: fileAttachments,
       hasFiles: hasFiles,
       conversationId: activity.conversation.id
     };
 
     console.log(`[Message] Processing query from user ${userId}: "${userMessage.substring(0, 50)}..."`);
+    if (hasFiles) {
+      console.log(`[Message] ${fileAttachments.length} file attachment(s) detected`);
+    }
     
     // Route through skills to get RAG and file processing results
     const skillResults = await router.route(userMessage, context);
@@ -322,6 +351,12 @@ app.on('message', async ({ send, stream, activity }) => {
       console.log(`[Message] Added ${citations.length} citations from RAG search`);
     }
     
+    // Add Yahoo Finance data if available
+    if (skillResults.yahoo_finance && skillResults.yahoo_finance.trim()) {
+      enhancedInstructions += '\n\n' + skillResults.yahoo_finance;
+      console.log(`[Message] Added Yahoo Finance data to context`);
+    }
+    
     // Add web search context if available
     if (skillResults.web_search && skillResults.web_search.trim()) {
       enhancedInstructions += '\n\n' + skillResults.web_search;
@@ -339,7 +374,7 @@ app.on('message', async ({ send, stream, activity }) => {
           fileResult.totalCount
         );
         enhancedInstructions += '\n\n' + fileContext;
-        
+         
         processedUserMessage = `${userMessage || 'Please analyze the uploaded document(s).'}`;
         
         // Send acknowledgment about file processing - only if this is the first time
