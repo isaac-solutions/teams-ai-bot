@@ -6,6 +6,7 @@ const { AzureOpenAI } = require('openai');
 
 /**
  * Web Search Skill - Searches the web for current information using Google Custom Search API
+ * Updated to use Jina Reader Pro as primary scraping method
  */
 class WebSearchSkill extends BaseSkill {
   constructor(config = {}) {
@@ -13,13 +14,23 @@ class WebSearchSkill extends BaseSkill {
     this.enabled = false; // Disabled until API is configured
     this.apiKey = config.googleApiKey;
     this.searchEngineId = config.googleSearchEngineId;
-    this.maxResults = 5; // Top 5 results for better success rate (some sites block datacenter IPs)
+    this.jinaApiKey = config.jinaApiKey; // NEW: Jina Reader API key
+    this.maxResults = 4; // Top 4 results for more concise output
     this.maxCharactersPerPage = 4000; // Limit content per page
-    this.fetchTimeout = 8000; // 8 second timeout for fetching pages
-    this.totalSearchTimeout = 25000; // 25 second overall timeout (increased for more results)
+    this.fetchTimeout = 15000; // 15 second timeout for fetching pages (increased from 8s)
+    this.jinaTimeout = 12000; // 12 second timeout for Jina Reader (increased from 5s)
+    this.totalSearchTimeout = 30000; // 30 second overall timeout (increased from 25s)
     this.apiCallCount = 0; // Track API usage
     this.dailyLimit = 90; // Daily limit (buffer under Google's 100/day free tier)
     this.lastResetDate = new Date().toDateString(); // Track when to reset counter
+    
+    // Request rate limiting to avoid overwhelming services
+    this.requestDelay = 800; // 800ms delay between requests (reduced from implicit)
+    this.lastRequestTime = 0;
+    
+    // Retry configuration for failed requests
+    this.maxRetries = 3;
+    this.retryDelay = 1000; // Start with 1 second, exponential backoff
     
     // Azure OpenAI configuration for LLM query optimization
     this.azureOpenAIKey = config.azureOpenAIKey;
@@ -30,11 +41,15 @@ class WebSearchSkill extends BaseSkill {
     if (this.llmOptimizationEnabled) {
       console.log('[WebSearchSkill] LLM query optimization enabled');
     }
+    
+    if (this.jinaApiKey) {
+      console.log('[WebSearchSkill] Jina Reader Pro API key configured');
+    }
   }
   
   /**
    * Execute web search
-   * @param {Object} context Contains query
+   * @param {Object} context Contains query and optional searchQuery parameter
    * @returns {Promise<string|null>} Search results with page content or null
    */
   async execute(context) {
@@ -43,7 +58,7 @@ class WebSearchSkill extends BaseSkill {
       return null;
     }
 
-    const { query } = context;
+    const { query, searchQuery } = context;
     
     if (!query || !query.trim()) {
       console.log('[WebSearchSkill] No query provided');
@@ -58,15 +73,24 @@ class WebSearchSkill extends BaseSkill {
     }
 
     try {
-      console.log(`[WebSearchSkill] Searching Google for: "${query}" (API call ${this.apiCallCount + 1}/${this.dailyLimit})`);
+      // Use pre-extracted search query if provided by orchestrator
+      const queryToSearch = searchQuery || query;
+      if (searchQuery) {
+        console.log(`[WebSearchSkill] Using pre-extracted search query: "${searchQuery}"`);
+      }
+      
+      console.log(`[WebSearchSkill] Searching Google for: "${queryToSearch}" (API call ${this.apiCallCount + 1}/${this.dailyLimit})`);
       
       // Wrap entire search operation with timeout
-      const searchPromise = this.performSearch(query);
+      // Note: If timeout fires, performSearch() may continue in background, but result is returned
+      // With optimization to stop after 2 successful extractions, this should complete quickly
+      const searchPromise = this.performSearch(queryToSearch, !!searchQuery);
       const timeoutPromise = new Promise((_, reject) => 
         setTimeout(() => reject(new Error('Web search operation timeout')), this.totalSearchTimeout)
       );
       
       const result = await Promise.race([searchPromise, timeoutPromise]);
+      console.log(`[WebSearchSkill] Search operation completed, returning result`);
       return result;
       
     } catch (error) {
@@ -82,13 +106,19 @@ class WebSearchSkill extends BaseSkill {
   /**
    * Perform the actual search operation (separated for timeout control)
    * @param {string} query Search query
+   * @param {boolean} skipOptimization If true, skip query optimization (already done by orchestrator)
    * @returns {Promise<string|null>} Formatted search results
    * @private
    */
-  async performSearch(query) {
-    // Step 1: Optimize search query using LLM or regex
-    const optimizedQuery = await this.optimizeSearchQuery(query);
-    console.log(`[WebSearchSkill] Optimized query: "${optimizedQuery}"`);
+  async performSearch(query, skipOptimization = false) {
+    // Step 1: Optimize search query using LLM or regex (skip if already optimized by orchestrator)
+    let optimizedQuery = query;
+    if (!skipOptimization) {
+      optimizedQuery = await this.optimizeSearchQuery(query);
+      console.log(`[WebSearchSkill] Optimized query: "${optimizedQuery}"`);
+    } else {
+      console.log(`[WebSearchSkill] Using pre-optimized query: "${optimizedQuery}"`);
+    }
     
     // Step 2: Get search results from Google
     const searchResults = await this.searchGoogle(optimizedQuery);
@@ -100,7 +130,7 @@ class WebSearchSkill extends BaseSkill {
     
     console.log(`[WebSearchSkill] Found ${searchResults.length} search results`);
     
-    // Step 3: Fetch and extract content from each page
+    // Step 3: Fetch and extract content from each page with rate limiting
     const resultsWithContent = await this.fetchAllPageContent(searchResults);
     
     // Step 4: If no pages could be fetched, fall back to snippets only
@@ -315,53 +345,113 @@ Optimized: "Microsoft company products services"`;
   }
   
   /**
-   * Fetch and extract content from all search result pages
+   * Fetch and extract content from all search result pages with rate limiting
+   * Stops after 2 successful extractions, but continues if 429 errors occur
    * @param {Array} searchResults Array of search results
    * @returns {Promise<Array>} Array of results with extracted content
    * @private
    */
   async fetchAllPageContent(searchResults) {
-    const promises = searchResults.map(async (result) => {
+    const results = [];
+    const targetSuccessCount = 2; // Stop after 2 successful extractions
+    let successCount = 0;
+    
+    // Process pages sequentially with rate limiting to avoid overwhelming services
+    for (const result of searchResults) {
+      // Stop if we've reached our target of 2 successful extractions
+      if (successCount >= targetSuccessCount) {
+        console.log(`[WebSearchSkill] Reached target of ${targetSuccessCount} successful extractions, stopping`);
+        break;
+      }
+      
       try {
+        // Apply rate limiting between requests
+        await this.applyRateLimit();
+        
         const content = await this.fetchPageContent(result.url);
         if (content && content.trim()) {
-          return {
+          results.push({
             ...result,
             content: content
-          };
+          });
+          successCount++;
+          console.log(`[WebSearchSkill] Successfully extracted page ${successCount}/${targetSuccessCount}: ${result.url}`);
         }
-        return null;
       } catch (error) {
-        // Skip failed pages silently
-        console.log(`[WebSearchSkill] Failed to fetch ${result.url}: ${error.message}`);
-    return null;
+        // Check if this is a 429 (rate limit) error
+        const is429Error = error.message && (
+          error.message.includes('429') || 
+          error.message.includes('rate limit') || 
+          error.message.includes('too many requests') ||
+          (error.response && error.response.status === 429)
+        );
+        
+        if (is429Error && successCount < targetSuccessCount) {
+          // If we have < 2 successes and get a 429, continue to next page
+          console.log(`[WebSearchSkill] Got 429 error on ${result.url}, but only have ${successCount}/${targetSuccessCount} successes - continuing to next page`);
+          // Continue to next iteration
+        } else {
+          // For non-429 errors or if we already have enough successes, skip silently
+          console.log(`[WebSearchSkill] Failed to fetch ${result.url}: ${error.message}`);
+        }
       }
-    });
+    }
     
-    const results = await Promise.all(promises);
-    return results.filter(r => r !== null);
+    return results;
   }
   
   /**
-   * Fetch HTML content from a URL
+   * Apply rate limiting between requests
+   * @private
+   */
+  async applyRateLimit() {
+    const now = Date.now();
+    const timeSinceLastRequest = now - this.lastRequestTime;
+    
+    if (timeSinceLastRequest < this.requestDelay) {
+      const waitTime = this.requestDelay - timeSinceLastRequest;
+      console.log(`[WebSearchSkill] Rate limiting: waiting ${waitTime}ms`);
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+    }
+    
+    this.lastRequestTime = Date.now();
+  }
+  
+  /**
+   * Fetch HTML content from a URL with retry logic
    * @param {string} url URL to fetch
    * @returns {Promise<string>} Extracted text content
    * @private
    */
   async fetchPageContent(url) {
-    try {
-      // Strategy 1: Try Jina AI Reader first (converts any URL to clean text)
+    // Skip LinkedIn URLs entirely - they're heavily protected
+    if (url.includes('linkedin.com')) {
+      console.log(`[WebSearchSkill] Skipping LinkedIn URL (heavily protected): ${url}`);
+      throw new Error('LinkedIn URLs are not supported');
+    }
+    
+    // Strategy 1: Try Jina Reader Pro with retry logic (primary method)
+    for (let attempt = 0; attempt < this.maxRetries; attempt++) {
       try {
-        const jinaText = await this.fetchViaJinaReader(url);
+        const jinaText = await this.fetchViaJinaReaderPro(url);
         if (jinaText && jinaText.length > 200) {
-          console.log(`[WebSearchSkill] Successfully extracted via Jina Reader (${jinaText.length} chars)`);
-          return jinaText;
+          const truncated = this.truncateText(jinaText);
+          console.log(`[WebSearchSkill] Successfully extracted via Jina Reader Pro (${jinaText.length} chars, truncated to ${truncated.length}) [attempt ${attempt + 1}]`);
+          return truncated;
         }
       } catch (jinaError) {
-        console.log(`[WebSearchSkill] Jina Reader failed: ${jinaError.message}, trying direct fetch`);
+        if (attempt < this.maxRetries - 1) {
+          const backoffTime = this.retryDelay * Math.pow(2, attempt);
+          console.log(`[WebSearchSkill] Jina Reader attempt ${attempt + 1} failed: ${jinaError.message}, retrying in ${backoffTime}ms`);
+          await new Promise(resolve => setTimeout(resolve, backoffTime));
+        } else {
+          console.log(`[WebSearchSkill] Jina Reader failed after ${this.maxRetries} attempts: ${jinaError.message}, trying direct fetch`);
+        }
       }
-      
-      // Strategy 2: Direct fetch with cheerio
+    }
+    
+    // Strategy 2: Direct fetch with cheerio (fallback)
+    try {
       const response = await axios.get(url, {
         timeout: this.fetchTimeout,
         headers: {
@@ -401,22 +491,56 @@ Optimized: "Microsoft company products services"`;
   }
   
   /**
-   * Fetch page content via Jina AI Reader (free service that converts URLs to clean text)
+   * Fetch page content via Jina Reader Pro (paid service with API key)
    * @param {string} url URL to fetch
    * @returns {Promise<string>} Extracted text
    * @private
    */
-  async fetchViaJinaReader(url) {
+  async fetchViaJinaReaderPro(url) {
     const jinaUrl = `https://r.jina.ai/${encodeURIComponent(url)}`;
+    
+    const headers = {
+      'Accept': 'text/plain',
+      'X-Return-Format': 'text'
+    };
+    
+    // Add Authorization header if API key is configured
+    if (this.jinaApiKey) {
+      headers['Authorization'] = `Bearer ${this.jinaApiKey}`;
+    }
+    
     const response = await axios.get(jinaUrl, {
-      timeout: 5000, // Reduced to 5 seconds for faster fallback
-      headers: {
-        'Accept': 'text/plain',
-        'X-Return-Format': 'text'
-      }
+      timeout: this.jinaTimeout,
+      headers: headers
     });
     
     return response.data;
+  }
+  
+  /**
+   * Truncate text to maxCharactersPerPage while trying to preserve sentence boundaries
+   * @param {string} text Text to truncate
+   * @returns {string} Truncated text
+   * @private
+   */
+  truncateText(text) {
+    if (text.length <= this.maxCharactersPerPage) {
+      return text;
+    }
+    
+    let truncated = text.substring(0, this.maxCharactersPerPage);
+    
+    // Try to cut at sentence boundary (period followed by space or newline)
+    const lastPeriod = truncated.lastIndexOf('. ');
+    const lastNewline = truncated.lastIndexOf('\n');
+    const cutPoint = Math.max(lastPeriod, lastNewline);
+    
+    // Only use the cut point if it's reasonably close to the limit (within 80%)
+    if (cutPoint > this.maxCharactersPerPage * 0.8) {
+      truncated = truncated.substring(0, cutPoint + 1);
+    }
+    
+    return truncated + '...';
   }
   
   /**
@@ -584,6 +708,12 @@ Optimized: "Microsoft company products services"`;
     
     this.enabled = true;
     console.log('[WebSearchSkill] Web search enabled successfully');
+    
+    if (this.jinaApiKey) {
+      console.log('[WebSearchSkill] Jina Reader Pro enabled with API key');
+    } else {
+      console.log('[WebSearchSkill] Warning: No Jina API key configured - using free tier (rate limited)');
+    }
   }
   
   /**
@@ -630,7 +760,7 @@ The following are web search results retrieved on ${formattedDate} UTC. This inf
    */
   formatResultsWithSnippets(results) {
     if (!results || results.length === 0) {
-    return '';
+      return '';
     }
     
     const searchTimestamp = new Date().toISOString();
@@ -661,4 +791,3 @@ The following are web search results retrieved on ${formattedDate} UTC. Full pag
 }
 
 module.exports = { WebSearchSkill };
-

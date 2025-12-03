@@ -1,6 +1,6 @@
 {
     "name": "aisaac",
-    "version": "1.7.2",
+    "version": "1.8.3",
     "msteams": {
         "teamsAppId": null
     },
@@ -25,6 +25,7 @@
         "url": "https://github.com/Aisaac/Aisaac-Teams-Agent"
     },
     "dependencies": {
+        "@anthropic-ai/sdk": "^0.32.0",
         "@azure/identity": "^4.11.1",
         "@azure/search-documents": "^12.0.0",
         "@microsoft/teams.ai": "^2.0.0",

@@ -1,8 +1,11 @@
 /**
  * Simple Router - Executes all applicable skills in parallel
- * This is the Phase 1 approach: always-on hybrid with basic filtering
  * 
- * Migration path: When ready for LLM orchestration, swap this with llmOrchestrator.js
+ * DEPRECATED: This router is kept as a fallback but is no longer the primary routing mechanism.
+ * The LLMOrchestrator is now used for intelligent skill routing with parameter extraction.
+ * 
+ * This router uses keyword-based canHandle() methods to determine which skills to execute.
+ * It's kept here as a backup if the LLM-based routing fails.
  */
 class SimpleRouter {
   /**

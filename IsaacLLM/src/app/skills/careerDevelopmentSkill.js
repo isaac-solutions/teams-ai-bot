@@ -72,13 +72,31 @@ class CareerDevelopmentSkill extends BaseSkill {
   /**
    * Determine if this skill should handle the query
    * Activates for career development and DPR-related queries
+   * Excludes sales prep and external company research queries
    */
   async canHandle(query, context) {
     if (!query) return false;
     
     const lowerQuery = query.toLowerCase();
     
-    // Check for trigger keywords
+    // EXCLUDE sales prep and external research queries
+    const salesPrepPatterns = [
+      /sales (call|prep|preparation|discovery|coach)/i,
+      /meeting (prep|preparation|with|call)/i,
+      /prepare (for|a) (sales|meeting|call)/i,
+      /research (company|client|prospect)/i,
+      /client research/i,
+      /(company|client|prospect) (overview|background|information)/i,
+      /(svp|vp|ceo|cfo|coo|president|director) (of|global|operations|supply chain|manufacturing)/i
+    ];
+    
+    // If this looks like a sales prep query, don't activate
+    if (salesPrepPatterns.some(pattern => pattern.test(query))) {
+      console.log('[CareerDevelopmentSkill] Skipping - detected sales prep/external research query');
+      return false;
+    }
+    
+    // Check for trigger keywords (only if not a sales prep query)
     const hasTriggerKeyword = this.triggerKeywords.some(keyword => 
       lowerQuery.includes(keyword.toLowerCase())
     );

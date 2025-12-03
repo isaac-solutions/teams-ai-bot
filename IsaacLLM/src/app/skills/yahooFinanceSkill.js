@@ -28,11 +28,11 @@ class YahooFinanceSkill extends BaseSkill {
   
   /**
    * Execute Yahoo Finance lookup
-   * @param {Object} context Contains query
+   * @param {Object} context Contains query and optional tickers parameter
    * @returns {Promise<string|null>} Formatted financial data or null
    */
   async execute(context) {
-    const { query } = context;
+    const { query, tickers } = context;
     
     if (!query || !query.trim()) {
       console.log('[YahooFinanceSkill] No query provided');
@@ -40,18 +40,24 @@ class YahooFinanceSkill extends BaseSkill {
     }
 
     try {
-      // Extract stock symbols from query using LLM (preferred) or fallback to pattern matching
+      // Use pre-extracted tickers if provided by orchestrator
       let symbols = [];
       
-      if (this.llmEnabled) {
-        symbols = await this.extractTickersWithLLM(query);
-        console.log(`[YahooFinanceSkill] LLM extracted tickers: ${symbols.join(', ')}`);
-      }
-      
-      // Fallback to pattern matching if LLM fails or returns nothing
-      if (symbols.length === 0) {
-        symbols = this.extractStockSymbols(query);
-        console.log(`[YahooFinanceSkill] Pattern-based extraction: ${symbols.join(', ')}`);
+      if (tickers && Array.isArray(tickers) && tickers.length > 0) {
+        symbols = tickers;
+        console.log(`[YahooFinanceSkill] Using pre-extracted tickers: ${symbols.join(', ')}`);
+      } else {
+        // Extract stock symbols from query using LLM (preferred) or fallback to pattern matching
+        if (this.llmEnabled) {
+          symbols = await this.extractTickersWithLLM(query);
+          console.log(`[YahooFinanceSkill] LLM extracted tickers: ${symbols.join(', ')}`);
+        }
+        
+        // Fallback to pattern matching if LLM fails or returns nothing
+        if (symbols.length === 0) {
+          symbols = this.extractStockSymbols(query);
+          console.log(`[YahooFinanceSkill] Pattern-based extraction: ${symbols.join(', ')}`);
+        }
       }
       
       if (symbols.length === 0) {
